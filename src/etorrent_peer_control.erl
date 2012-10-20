@@ -293,6 +293,9 @@ init([TrackerUrl, LocalPeerID, InfoHash, TorrentID, {IP, Port}, Caps, Socket]) -
 
     ok = etorrent_table:new_peer(TrackerUrl, IP, Port, TorrentID, self(), leeching),
     ok = etorrent_choker:monitor(self()),
+    
+    {ok, RecieverPid} = etorrent_peer_recv:start_link(Id, Socket),
+    {ok, SenderPid} = etorrent_peer_send:start_link(Id, Socket, false),
     State = #state{
         torrent_id=TorrentID,
         info_hash=InfoHash,

@@ -44,21 +44,15 @@ start_child(PeerId, InfoHash, Id, {IP, Port}, Capabilities, Socket) ->
                          {ok, pid(), pid()} | {error, term()}.
 start_child(TrackerUrl, PeerId, InfoHash, Id,
             {IP, Port}, Capabilities, Socket) ->
-    GroupPid = gproc:lookup_local_name({torrent, Id, peer_pool_sup}),
-    case supervisor:start_child(GroupPid,
-                                [TrackerUrl,
-                                 PeerId, InfoHash,
-                                 Id,
-                                 {IP, Port},
-                                 Capabilities,
-                                 Socket]) of
-        {ok, _Pid} ->
-            RecvPid = etorrent_peer_recv:await_server(Socket),
-            ControlPid = etorrent_peer_control:await_server(Socket),
-            {ok, RecvPid, ControlPid};
-        {error, Reason} ->
-            lager:warning("Error starting child: ~p", [Reason]),
-            {error, Reason}
+   GroupPid = gproc:lookup_local_name({torrent, Id, peer_pool_sup}),
+   case supervisor:start_child(GroupPid, [TrackerUrl, PeerId, InfoHash, Id, {IP, Port}, Capabilities, Socket]) of
+     {ok, _Pid} ->
+       RecvPid = etorrent_peer_recv:await_server(Socket),
+       ControlPid = etorrent_peer_control:await_server(Socket),
+       {ok, RecvPid, ControlPid}
+     {error, Reason} ->
+       lager:warning("Error starting child: ~p", [Reason]),
+       {error, Reason}
     end.
 
 %% ====================================================================
@@ -66,7 +60,7 @@ start_child(TrackerUrl, PeerId, InfoHash, Id,
 %% @private
 init([Id]) ->
     gproc:add_local_name({torrent, Id, peer_pool_sup}),
-    ChildSpec = {child,
-                 {etorrent_peer_sup, start_link, []},
-                 temporary, infinity, supervisor, [etorrent_peer_sup]},
-    {ok, {{simple_one_for_one, 50, 3600}, [ChildSpec]}}.
+    ChildSpec = {child, {
+                 {etorrent_peer_control, start_link, []},
+                 temporary, 5000, worker, [etorrent_peer_control]},
+    {ok, {{simple_one_for_one, 10, 3600}, [ChildSpec]}}.
