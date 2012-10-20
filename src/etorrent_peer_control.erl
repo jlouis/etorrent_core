@@ -685,9 +685,9 @@ handle_message({bitfield, Bitfield}, State) ->
     NewState  = State#state{remote=NewRemote, local=NewLocal},
     {ok, NewState};
 
-handle_message({piece, Index, Offset, Data}, State) ->
-    #state{torrent_id=TorrentId} = State,
-    #state{send_pid=SendPid, download=Download, local=Local, remote=Remote} = State,
+handle_message(
+	{piece, Index, Offset, Data},
+	#state{send_pid=SendPid, download=Download, local=Local, torrent_id=TorrentId, remote=Remote} = State) ->
     Length = byte_size(Data),
     Requests = etorrent_peerstate:requests(Local),
     NewLocal = case etorrent_rqueue:is_head(Index, Offset, Length, Requests) of
