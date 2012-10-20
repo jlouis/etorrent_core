@@ -49,7 +49,7 @@ start_child(TrackerUrl, PeerId, InfoHash, Id,
      {ok, _Pid} ->
        RecvPid = etorrent_peer_recv:await_server(Socket),
        ControlPid = etorrent_peer_control:await_server(Socket),
-       {ok, RecvPid, ControlPid}
+       {ok, RecvPid, ControlPid};
      {error, Reason} ->
        lager:warning("Error starting child: ~p", [Reason]),
        {error, Reason}
@@ -60,7 +60,6 @@ start_child(TrackerUrl, PeerId, InfoHash, Id,
 %% @private
 init([Id]) ->
     gproc:add_local_name({torrent, Id, peer_pool_sup}),
-    ChildSpec = {child, {
-                 {etorrent_peer_control, start_link, []},
+    ChildSpec = {child, {etorrent_peer_control, start_link, []},
                  temporary, 5000, worker, [etorrent_peer_control]},
     {ok, {{simple_one_for_one, 10, 3600}, [ChildSpec]}}.

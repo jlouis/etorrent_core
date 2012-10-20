@@ -53,7 +53,6 @@
 -record(state, {
     socket     :: inet:socket(),
     buffer     :: queue(),
-    control    :: pid(),
     limiter    :: none | pid(),
     rate       :: etorrent_rate:rate(),
     torrent_id :: integer()}).
@@ -65,11 +64,11 @@
 
 %% @doc Start the encoder process.
 %% @end
--spec start_link(port(), integer(), boolean()) ->
+-spec start_link(integer(), port(), boolean()) ->
     ignore | {ok, pid()} | {error, any()}.
-start_link(Socket, TorrentId, FastExtension) ->
+start_link(TorrentId, Socket, Extensions) ->
     gen_server:start_link(?MODULE,
-                          [Socket, TorrentId, FastExtension], []).
+                          [TorrentId, Socket, Extensions], []).
 
 %% @doc Register the local process as the encoder for a socket
 -spec register_server(inet:socket()) -> true.
@@ -176,18 +175,16 @@ forward_message(Pid, Message) ->
 
 
 %% @private
-init([Socket, TorrentId, _FastExtension]) ->
+init([TorrentId, Socket, _FastExtension]) ->
     register_server(Socket),
     erlang:send_after(?DEFAULT_KEEP_ALIVE_INTERVAL, self(), tick),
     erlang:send_after(?RATE_UPDATE, self(), rate_update),
-    CPid = etorrent_peer_control:await_server(Socket),
     State = #state{
-        socket = Socket,
-		buffer = queue:new(),
-		rate = etorrent_rate:init(),
-		control = CPid,
-        limiter = none,
-		torrent_id = TorrentId},
+	socket = Socket,
+	buffer = queue:new(),
+	rate = etorrent_rate:init(),
+	limiter = none,
+	torrent_id = TorrentId},
     {ok, State}.
 
 
@@ -231,9 +228,10 @@ handle_info(tick, State) ->
 
 %% When we are requested to update our rate, we do it here.
 handle_info(rate_update, State) ->
-    #state{torrent_id=TorrentID, rate=Rate, control=Control} = State,
+    #state{torrent_id=TorrentID, rate=Rate, socket = Socket} = State,
     erlang:send_after(?RATE_UPDATE, self(), rate_update),
     NewRate = etorrent_rate:update(Rate, 0),
+    Control = etorrent_peer_control:lookup_server(Socket),
     ok = etorrent_peer_states:set_send_rate(TorrentID, Control, NewRate#peer_rate.rate),
     NewState = State#state{rate=NewRate},
     {noreply, NewState};
