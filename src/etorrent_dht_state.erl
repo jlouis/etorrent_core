@@ -81,13 +81,13 @@
          code_change/3]).
 
 -record(state, {
-    node_id,
-    buckets=b_new(), % The actual routing table
-    node_timers=timer_tree(), % Node activity times and timeout references
-    buck_timers=timer_tree(),% Bucker activity times and timeout references
-    node_timeout=10*60*1000,  % Default node keepalive timeout
-    buck_timeout=5*60*1000,   % Default bucket refresh timeout
-    state_file="/tmp/dht_state"}). % Path to persistent state
+    node_id :: pos_integer(),
+    buckets=b_new() :: term(), % The actual routing table
+    node_timers=timer_tree() :: term(), % Node activity times and timeout references
+    buck_timers=timer_tree() :: term(),% Bucker activity times and timeout references
+    node_timeout=10*60*1000 :: pos_integer(),  % Default node keepalive timeout
+    buck_timeout=5*60*1000 :: pos_integer(),   % Default bucket refresh timeout
+    state_file="/tmp/dht_state" :: string() }). % Path to persistent state
 %
 % The bucket refresh timeout is the amount of time that the
 % server will tolerate a node to be disconnected before it
@@ -322,6 +322,10 @@ random_node_tag() ->
 
 %% @private
 init([StateFile]) ->
+    %% This function has to trap exits in order to save the state file upon a close-down
+    %% of the service.
+    process_flag(trap_exit, true),
+
     % Initialize the table of unreachable nodes when the server is started.
     % The safe_ping and unsafe_ping functions aren't exported outside of
     % of this module so they should fail unless the server is not running.
@@ -638,12 +642,17 @@ handle_info({inactive_bucket, Range}, State) ->
     {noreply, NewState}.
 
 %% @private
-terminate(_, State) ->
-    #state{
-        node_id=Self,
-        buckets=Buckets,
-        state_file=StateFile} = State,
-    dump_state(StateFile, Self, b_node_list(Buckets)).
+terminate(Reason,
+		#state {
+			node_id = NodeId,
+			buckets = Buckets,
+			state_file = Statefile })
+	when Reason == normal; Reason == shutdown ->
+		dump_state(Statefile, NodeId, b_node_list(Buckets));
+terminate(_Reason, _State) ->
+	%% Any other error type means that we can't trust the internal state, so just
+	%% close down without storing the state file.
+	ok.
 
 dump_state(Filename, Self, NodeList) ->
     PersistentState = [{node_id, Self}, {node_set, NodeList}],
