@@ -78,7 +78,7 @@
 
 -type torrent_id() :: etorrent_types:torrent_id().
 -type pieceindex() :: etorrent_types:piece_index().
--type pieceset() :: etorrent_pieceset:pieceset().
+-type pieceset() :: etorrent_pieceset:t().
 -type monitorset() :: etorrent_monitorset:monitorset().
 -type timeserver() :: etorrent_timer:timeserver().
 -type table() :: atom() | ets:tid().
@@ -104,9 +104,6 @@
     num_peers     = exit(required) :: table(),
     peer_monitors = exit(required) :: monitorset(),
     watchers      = exit(required) :: [#watcher{}]}).
-
--compile({no_auto_import, [monitor/2, demonitor/1]}).
--import(erlang, [monitor/2, demonitor/1]).
 
 %% @doc Register as the scarcity server for a torrent
 %% @end
@@ -267,7 +264,7 @@ handle_call({watch, Pid, Interval, Tag, Pieceset}, _, State) ->
     %% crash. Currently the interface of the monitorset module does
     %% not let us associate values with monitor references so there
     %% is no benefit to using it in this case.
-    MRef = monitor(process, Pid),
+    MRef = erlang:monitor(process, Pid),
     TRef = etorrent_timer:start_timer(Time, Interval, self(), MRef),
     Piecelist = etorrent_pieceset:to_list(Pieceset),
     Watcher = #watcher{
@@ -287,7 +284,7 @@ handle_call({watch, Pid, Interval, Tag, Pieceset}, _, State) ->
 
 handle_call({unwatch, MRef}, _, State) ->
     #state{timeserver=Time, watchers=Watchers} = State,
-    demonitor(MRef),
+    erlang:demonitor(MRef),
     Watcher = lists:keyfind(MRef, #watcher.ref, Watchers),
     #watcher{timer_ref=TRef} = Watcher,
     case TRef of none -> ok; _ -> etorrent_timer:cancel(Time, TRef) end,

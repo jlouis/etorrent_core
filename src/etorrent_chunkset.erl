@@ -194,17 +194,10 @@ delete([], Chunkset) ->
 delete([{Offset, Length}|T], Chunkset) ->
     delete(T, delete(Offset, Length, Chunkset)).
 
-
-insert([], Chunkset) ->
-    Chunkset;
-insert([{Offset, Length}|T], Chunkset) ->
-    insert(T, insert(Offset, Length, Chunkset)).
-
-
 %% @doc
 %% 
 %% @end
-delete(Offset, Length, Chunkset) when Length < 1; Offset < 0 ->
+delete(Offset, Length, _Chunkset) when Length < 1; Offset < 0 ->
     erlang:error(badarg);
 delete(Offset, Length, Chunkset) ->
     #chunkset{chunks=Chunks} = Chunkset,

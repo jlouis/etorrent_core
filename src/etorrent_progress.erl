@@ -93,7 +93,7 @@
 -export([stored_chunks/1]).
 
 
--type pieceset()   :: etorrent_pieceset:pieceset().
+-type pieceset()   :: etorrent_pieceset:t().
 -type torrent_id() :: etorrent_types:torrent_id().
 -type chunk_len() :: etorrent_types:chunk_len().
 -type piece_index() :: etorrent_types:piece_index().
@@ -484,7 +484,7 @@ handle_call({chunk, {request, Numchunks, Peerset, PeerPid}}, _, State) ->
                 false ->
                     {reply, {ok, assigned}, State};
                 true ->
-                    CtlPid = etorrent_torrent_sup:lookup_server(TorrentID),
+                    CtlPid = etorrent_torrent_ctl:lookup_server(TorrentID),
                     etorrent_torrent_ctl:switch_mode(CtlPid, endgame),
                     NewState = State#state{active=false},
                     {reply, {ok, assigned}, NewState}

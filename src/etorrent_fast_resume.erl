@@ -107,7 +107,6 @@ init([]) ->
         case dets:open_file(Statefile, []) of
             {ok, Table} ->
                 {ok, Table};
-            %% An old spoolfile may have been created using ets:tab2file.
             %% Removing it and reopening the dets table works in this case.
             {error,{not_a_dets_file, _}} ->
                 etorrent_event:notify(statefile_is_not_dets),

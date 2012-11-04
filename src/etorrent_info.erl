@@ -29,32 +29,19 @@
         ]).
 
 
--export([init/1,
-         handle_call/3,
-         terminate/2,
-         code_change/3]).
+-export([
+	init/1,
+	handle_cast/2,
+	handle_call/3,
+	handle_info/2,
+	terminate/2,
+	code_change/3]).
 
 
--type block_len() :: etorrent_types:block_len().
--type block_offset() :: etorrent_types:block_offset().
 -type bcode() :: etorrent_types:bcode().
--type piece_bin() :: etorrent_types:piece_bin().
--type chunk_len() :: etorrent_types:chunk_len().
--type chunk_offset() :: etorrent_types:chunk_offset().
--type chunk_bin() :: etorrent_types:chunk_bin().
--type piece_index() :: etorrent_types:piece_index().
--type file_path() :: etorrent_types:file_path().
 -type torrent_id() :: etorrent_types:torrent_id().
 -type file_id() :: etorrent_types:file_id().
--type block_pos() :: {string(), block_offset(), block_len()}.
--type pieceset() :: etorrent_pieceset:pieceset().
-
--record(io_file, {
-    rel_path :: file_path(),
-    process  :: pid(),
-    monitor  :: reference(),
-    accessed :: {integer(), integer(), integer()}}).
-
+-type pieceset() :: etorrent_pieceset:t().
 
 -record(state, {
     torrent :: torrent_id(),
@@ -79,11 +66,8 @@
     size      = 0 :: non_neg_integer(),
     % byte offset from 0
     position  = 0 :: non_neg_integer(),
-    pieces :: array()
+    pieces :: etorrent_pieceset:t()
 }).
-
--type file_info() :: #file_info{}.
-
 
 %% @doc Start the File I/O Server
 %% @end
@@ -229,7 +213,7 @@ long_file_name(TorrentID, FileID) when is_list(FileID), is_integer(TorrentID) ->
 
 
 full_file_name(TorrentID, FileID) when is_integer(FileID), is_integer(TorrentID) ->
-    RelName = etorrent_io:file_name(TorrentID, FileID),
+    RelName = file_name(TorrentID, FileID),
     FileServer = etorrent_io:lookup_file_server(TorrentID, RelName),
     {ok, Name} = etorrent_io_file:full_path(FileServer),
     Name.
@@ -306,7 +290,7 @@ handle_call({get_mask, FileID, PartStart, PartSize}, _, State) ->
     case array:get(FileID, Arr) of
         undefined ->
             {reply, {error, badid}, State};
-        #file_info {position = FileStart, size = FileSize} ->
+        #file_info {position = FileStart} ->
             %% true = PartSize =< FileSize,
 
             %% Start from beginning of the torrent
@@ -372,7 +356,16 @@ handle_call({tree_children, FileID}, _, State) ->
             {reply, {ok, Children}, State}
     end.
 
+%% @private
+handle_cast(Msg, State) ->
+    lager:warning("Spurious handle cast: ~p", [Msg]),
+    {noreply, State}.
+    
 
+%% @private
+handle_info(Msg, State) ->
+    lager:warning("Spurious handle info: ~p", [Msg]),
+    {noreply, State}.
 
 %% @private
 terminate(_, _) ->
@@ -391,7 +384,6 @@ code_change(_OldVsn, State, _Extra) ->
 collect_static_file_info(Torrent) ->
     PieceLength = etorrent_metainfo:get_piece_length(Torrent),
     FileLengths = etorrent_metainfo:file_path_len(Torrent),
-    CurrentDirectory = "",
     Acc = [],
     Pos = 0,
     %% Rec1, Rec2, .. are lists of nodes.
@@ -483,7 +475,7 @@ file_prefix_(S1, S2) ->
 
 
 %% @private
-add_directories_([], Idx, Cur, Children, Acc) ->
+add_directories_([], Idx, _Cur, Children, Acc) ->
     {Acc, lists:reverse(Children), Idx, []};
 
 %% @private
@@ -545,7 +537,6 @@ fill_pieces(RecList, PLen, TLen) ->
 fill_ids(RecList) ->
     fill_ids_(RecList, 0, []).
 
-
 fill_ids_([H1=#file_info{name=Name}|T], Id, Acc) ->
     % set id, prepare name for cascadae
     H2 = H1#file_info{
@@ -591,7 +582,7 @@ minimize_([H|T], []) ->
 
 
 %% H is a ancestor of the previous element. Skip H.
-minimize_([H=#file_info{position=Pos}|T], 
+minimize_([ #file_info{position=Pos} | T ], 
     [#file_info{size=PrevSize, position=PrevPos}|_] = Acc)
     when Pos < (PrevPos + PrevSize) ->
     minimize_(T, Acc);
