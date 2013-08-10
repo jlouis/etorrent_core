@@ -24,5 +24,5 @@ include erlang.mk
 
 .PHONY: analyze
 analyze:
-	@dialyzer --plt .$(PROJECT).plt --no_native -r ebin
+	@dialyzer --fullpath --plt .$(PROJECT).plt --no_native -r ebin
 

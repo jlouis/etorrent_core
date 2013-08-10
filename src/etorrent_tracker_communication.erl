@@ -47,13 +47,17 @@
 
 -export([ifaddrs/0]).
 
--type tier() :: etorrent_types:tier().
+-ifdef(TEST).
+-export([first_tracker_id/1]).
+-endif.
+
+-type tier() :: [{integer(), binary()}].
 -record(state, {queued_message = none :: none | started,
                 %% The hard timer is the time we *must* wait on the tracker.
                 %% soft timer may be overridden if we want to change state.
                 soft_timer     :: reference() | none,
                 hard_timer     :: reference() | none,
-                url = [[]]     :: [tier()],
+                url = []     :: [tier()],
                 info_hash      :: binary(),
                 peer_id        :: binary(),
                 control_pid    :: pid(),
@@ -175,15 +179,12 @@ contact_tracker(S) ->
     contact_tracker(none, S).
 
 contact_tracker(Event, #state { url = Tiers } = S) ->
-    case contact_tracker(Tiers, Event, S) of
-        {none, NS} -> NS;
-        {ok, NS}   -> NS
-    end.
+    contact_tracker(Tiers, Event, S).
 
 contact_tracker(Tiers, Event, S) ->
     case contact_tracker(Tiers, Event, S, []) of
-        none     -> {none, handle_timeout(S)};
-        {ok, NS} -> {ok, NS}
+        none     -> handle_timeout(S);
+        {ok, NS} -> NS
     end.
 
 -spec contact_tracker(Tiers, Event, State, Acc) -> {ok, State} | none when
@@ -230,20 +231,18 @@ contact_tracker_tier([{TrackerID, Url} = Cur | Next], Event, S, Acc) ->
     end.
 
 identify_url_type(Url) ->
-    case etorrent_http_uri:parse(Url) of
-        {S1, _UserInfo, Host, Port, _Path, _Query} ->
-            case S1 of
-                http ->
-                    http;
-                udp ->
-                    {udp, Host, Port}
-            end;
-        {error, Reason} ->
-            lager:error("Unknown URL type for url ~s, error: ~p",
-                        [Url, Reason]),
-            exit(identify_url_type)
-
-    end.
+	case etorrent_http_uri:parse(Url) of
+	  {S1, _UserInfo, Host, Port, _Path, _Query} ->
+	  	case S1 of
+	 	  http -> http;
+		  udp ->
+			{ok, IP} = inet:getaddr(Host, inet),
+ 			{udp, IP, Port}
+		end;
+	  {error, Reason} ->
+		lager:error("Unknown URL type for url ~s, error: ~p", [Url, Reason]),
+		exit(identify_url_type)
+	end.
 
 %% @doc Disconnect from tracker designated by its url.
 %% <p>It is called to comply with BEP 27 Private Torrents,
@@ -285,7 +284,7 @@ format_ipv6_address(Tuple) ->
              "~4.16.0B:~4.16.0B:~4.16.0B:~4.16.0B",
     iolist_to_binary(io_lib:format(Format, tuple_to_list(Tuple))).
 
-contact_tracker_udp(Url, TrackerID, TrackerIP, TrackerPort, Event,
+contact_tracker_udp(Url, _TrackerID, TrackerIP, TrackerPort, Event,
                     #state { torrent_id = Id,
                              info_hash = InfoHash,
                              peer_id = PeerId,
@@ -321,14 +320,7 @@ contact_tracker_udp(Url, TrackerID, TrackerIP, TrackerPort, Event,
             lager:debug("UDP reply handled"),
             {Interval, MinInterval} = 
                 handle_udp_response(Url, Id, Peers, Status),
-            {ok, handle_timeout(Interval, MinInterval, S)};
-        {error, Reason} ->
-            etorrent_tracker:statechange(TrackerID, [{message, error, Reason}]),
-            error;
-        timeout ->
-            etorrent_tracker:statechange(TrackerID,
-                                         [{message, error, <<"Timeout.">>}]),
-            error
+            {ok, handle_timeout(Interval, MinInterval, S)}
     end.
 
 %% @todo: consider not passing around the state here!
