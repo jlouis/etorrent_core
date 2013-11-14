@@ -75,7 +75,11 @@ mk_comment(Comment) when is_list(Comment) ->
 
 mk_infodict_single(PieceHashes, Name, Sz) when is_binary(PieceHashes) ->
     [{<<"pieces">>, PieceHashes},
-     {<<"piece length">>, ?CHUNKSIZE},
+     if Sz < ?CHUNKSIZE ->
+                {<<"piece length">>, Sz};
+            true ->
+                {<<"piece length">>, ?CHUNKSIZE}
+        end,
      {<<"name">>, list_to_binary(filename:basename(Name))},
      {<<"length">>, Sz}].
 
